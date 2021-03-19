@@ -1,4 +1,4 @@
-# stock-market-time
+# Alpaca Market Time
 
 This script allows you to run a script based on market time.
 
