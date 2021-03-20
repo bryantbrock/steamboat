@@ -1,7 +1,6 @@
-# <span style="color:blue">Steamboat</span> - trade and backtest stock market algorithms
+# [Steamboat](github.com/bryantbrock/steamboat) - trade and backtest stock market algorithms
 Steamboat is a python framework for building financial algorithms for the trading stocks on the stock market. It allows you to backtest strategies and trade both live and paper via the [alpaca api](alpaca.markets).Itcomes prebuilt with two primary classes: `AlpacaTrade` and `AlpacaBacktest`. Create simple logic once, and run it through both the backtest and the live trading class. No need for different logic. `AlpacaTrade` has built in support for paper, just specificy `paper=True` when initializing it. Before installing, head over to alpaca's website to get a paper account setup and grab the api keys provided.
 
-<span style="color:blue">Steamboat</span>
 ## Installation
 Simply clone the repository to the root folder of your strategy.
 ```
