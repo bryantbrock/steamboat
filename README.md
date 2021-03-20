@@ -8,7 +8,8 @@ Simply clone the repository to the root folder of your strategy.
 git clone https://github.com/bryantbrock/steamboat.git
 ```
 
-Then, access it via `import`, as if you had built the framework yourself.
+
+Then, access it via import, as if you had built the framework yourself.
 ```
 from steamboat import AlpacaTrade, AlpacaBacktest
 ```
