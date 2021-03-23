@@ -37,7 +37,7 @@ class AlpacaMarketTime(object):
       headers=self.headers
     ).json()
 
-  def get_waitinfo(self):
+  def get_sleep_seconds(self):
     market = self.get_clock()
 
     ny_next_open = datetime.fromisoformat(market['next_open'])
@@ -72,6 +72,6 @@ class AlpacaMarketTime(object):
 
       print('\n  => Markets are CLOSED <=')
 
-      seconds = self.get_waitinfo()
+      seconds = self.get_sleep_seconds()
 
       time.sleep(seconds)
