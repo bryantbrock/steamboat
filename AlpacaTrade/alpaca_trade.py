@@ -1,7 +1,7 @@
 from alpaca_indicators import SMA, ATR
 from alpaca_api import Alpaca, AlpacaStreaming, get_symbols
 from alpaca_monitor import live_monitoring
-from utils import key, get_time_info
+from utils import key, get_time_till
 from datetime import datetime
 
 import numpy as np
@@ -45,6 +45,12 @@ class AlpacaTrade(object):
     self.buying_power = 0
 
   def iterate(self):
+    """
+    This contains most of the pipline logic. Everything from fetching
+    the necessary data to preping the obj for screening, analyzing,
+    and selecting.
+    """
+
     self.get_account_info()
 
     if len(self.positions) == self.max_positions:
@@ -77,49 +83,52 @@ class AlpacaTrade(object):
     self.trade()
 
 
-  def run(self, iterate_every=60*1):
+  def run(self, iterate_every=60*1, run_during_market=True):
+    """
+    The primary method of `AlpacaTrade`: call it to run the algorithm
+    during market hours. If you wish to run it all the time and not check
+    for market hours, set `during_market=False`.
+    """
+
     while True:
       market = apc.get_clock()
 
-      if market['is_open']:
+      if market['is_open'] or not run_during_market:
+
         print('\n :: Markets are OPEN. Running algorithm. ')
-        self.algorithm(iterate_every)
+        iteration_start_time = time.time()
+        iteration = 0
+
+        if not self.allow_daytrading:
+          live_monitoring_thread = threading.Thread(
+            target=live_monitoring,
+            args=(self),
+            daemon=True
+          )
+          live_monitoring_thread.start()
+
+        while True:
+          iteration += 1
+          print('\n\n:: Iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
+          market = self.apc.get_clock()
+          seconds = get_time_till(market, till='next_close')
+
+          if seconds < 60*1 and run_during_market:
+            break
+
+          self.iterate()
+
+          print(':: Finished iteration {} at {}'.format(iteration, time.strftime(template)))
+          time.sleep(iterate_every - ((time.time() - iteration_start_time) % iterate_every))
 
       print('\n :: Markets are CLOSED. Sleeping. ')
 
+      #TODO: Cancel market data streaming.
+
       market = apc.get_clock()
-      seconds = get_time_info(market)
+      seconds = get_time_till(market, till='next_open')
 
       time.sleep(seconds)
-
-  def algorithm(self, iterate_every):
-    iteration_start_time = time.time()
-    iteration = 0
-
-    if not self.allow_daytrading:
-      live_monitoring_thread = threading.Thread(
-        target=live_monitoring,
-        args=(self),
-        daemon=True
-      )
-      live_monitoring_thread.start()
-
-    while True:
-      iteration += 1
-      print('\n\n:: Iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
-      market = self.apc.get_clock()
-      # current_hour = datetime.now().hour + 3
-      # current_minute = (datetime.now().minute / 100)
-      # closing_time = datetime.fromisoformat(market['next_close']).hour - .40
-      # till_close = closing_time - (current_hour + current_minute)
-
-      if not market['is_open']:
-        break
-
-      self.iterate()
-
-      print(':: Finished iteration {} at {}'.format(iteration, time.strftime(template)))
-      time.sleep(iterate_every - ((time.time() - iteration_start_time) % iterate_every))
 
 
   def get_account_info(self):
@@ -219,24 +228,24 @@ class StackOne(AlpacaTrade):
       avg_volatility = sum(self.data[symbol]['ATR'].iloc[-10:]) / 10
       order['volatility'] = avg_volatility
 
-    sorted_orders = sorted(self.orders, key=lambda x: x['volatility'], reverse=True)
+    sorted_orders = sorted(self.orders, key=lambda x: x['volatility'])
 
     return sorted_orders[:self.max_positions]
 
 
 
-# bryantleebrock@gmail.com paper account
-auth = {
-  'api_key': 'PK0ZTJY4V309PKX2DNVI',
-  'secret_key': 'X4s2I5tiyRavpHl9Rre8SvNuiO8Huxjh5AsFE07e',
-}
+if __name__ == '__main__':
 
-apc_trade = StackOne(
-  auth['api_key'],
-  auth['secret_key'],
-  allow_daytrading=False,
-  max_positions=2, stop_loss=0.70,
-  take_profit=1.06, data_limit=200
-)
+  auth = {
+    'api_key': 'PK0ZTJY4V309PKX2DNVI',
+    'secret_key': 'X4s2I5tiyRavpHl9Rre8SvNuiO8Huxjh5AsFE07e',
+  }
 
-apc_trade
+  apc_trade = StackOne(
+    auth['api_key'],
+    auth['secret_key'],
+    max_positions=2, stop_loss=0.70,
+    take_profit=1.06, data_limit=400
+  )
+
+  apc_trade.run()
