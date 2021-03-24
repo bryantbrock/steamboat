@@ -115,7 +115,6 @@ class AlpacaTrade:
 
         while True:
           iteration += 1
-          print('\n\n::::: Iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
           market = self.apc.get_clock()
           seconds = get_time_till(market, till='next_close')
 
@@ -125,14 +124,17 @@ class AlpacaTrade:
           if seconds < 60*1 and market['is_open'] and run_during_market:
             break
 
+          print('::::: Started iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
+
           self.iterate()
 
+          print('::::: Finished iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
+
           if len(self.positions) == self.max_positions and \
-             len(self.streams) == 0 and \
-             run_during_market:
+             len(self.streams) == 0 and run_during_market and \
+             not self.allow_daytrading:
             break
 
-          print('::::: Finished iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
           time.sleep(iterate_every - ((time.time() - iteration_start_time) % iterate_every))
 
       print('\n::::: Stopping algorithm. ')

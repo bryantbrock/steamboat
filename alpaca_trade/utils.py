@@ -34,7 +34,7 @@ def get_time_till(market, till='next_open'):
 
   open_close = till.split('_')[-1]
 
-  print(f'      _Markets {open_close} on ', ny_open_date, f' :: NY Time (UTC {ny_offset})')
+  print(f'\n\n      _Markets {open_close} on ', ny_open_date, f' :: NY Time (UTC {ny_offset})')
   print(f'      _Markets {open_close} on ', local_open_date, f' :: Local Time (UTC {local_offset})')
 
   return seconds
