@@ -98,7 +98,9 @@ class AlpacaTrade:
     self.trade()
 
 
-  def run(self, iterate_every=60*1, run_during_market=True):
+  def run(self, iterate_every=60*1,
+          run_during_market=True,
+          minutes_after_open=20):
     """
     The primary method of `AlpacaTrade`: call it to run the algorithm
     during market hours. If you wish to run it all the time and not check
@@ -146,8 +148,9 @@ class AlpacaTrade:
 
       market = self.apc.get_clock()
       seconds = get_time_till(market, till='next_open')
+      seconds += 60*minutes_after_open
 
-      print('\n::::: Sleeping till next market open. ')
+      print(f'\n::::: Sleeping till {minutes_after_open} minutes after next market open. ')
       time.sleep(seconds)
 
 
