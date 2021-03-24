@@ -127,10 +127,15 @@ class AlpacaTrade:
 
           self.iterate()
 
+          if len(self.positions) == self.max_positions and \
+             len(self.streams) == 0 and \
+             run_during_market:
+            break
+
           print('::::: Finished iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
           time.sleep(iterate_every - ((time.time() - iteration_start_time) % iterate_every))
 
-      print('\n::::: Markets are CLOSED. Sleeping. ')
+      print('\n::::: Stopping algorithm. ')
 
       #TODO: Cancel market data streaming.
 
@@ -212,6 +217,10 @@ class AlpacaTrade:
           order['price'] * self.stop_loss, tif='gtc'
         )
 
+
+  # Live monitoroing if allow_daytrading=False
+
+
   def sell(self, symbol):
     for position in self.positions:
       if position['symbol'] == symbol:
@@ -249,8 +258,4 @@ class AlpacaTrade:
     symbol, price = self.unwrap_message(message)
     print(f'      ~~Message: {symbol} is at ${price}')
 
-    """
-      This function is only necessary allow_daytrading=False.
-      Return 'restart' if sold stocks, else do nothing.
-    """
     self.monitoring(symbol, price)
