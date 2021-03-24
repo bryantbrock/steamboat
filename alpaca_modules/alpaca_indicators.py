@@ -40,13 +40,13 @@ def stochastic(data, lookback=14, k=3, d=3):
   return data
 
 
-def ATR(data, period=14):
+def ATR(data, periods=14):
   for df in data:
     data[df]['H-L'] = data[df]['high'] - data[df]['low']
     data[df]['H-PC'] = abs(data[df]['high'] - data[df]['close'].shift(1))
     data[df]['L-PC'] = abs(data[df]['low'] - data[df]['close'].shift(1))
     data[df]['TR'] = data[df][['H-L', 'H-PC', 'L-PC']].max(axis=1, skipna=False)
-    data[df]['ATR'] = data[df]['TR'].ewm(span=period, min_periods=period).mean()
+    data[df]['ATR'] = data[df]['TR'].ewm(span=periods, min_periods=periods).mean()
 
     data[df].drop(['H-L', 'H-PC', 'L-PC', 'TR'], axis=1, inplace=True)
 
