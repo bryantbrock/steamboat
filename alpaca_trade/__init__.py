@@ -1,6 +1,6 @@
 from ..alpaca_modules.alpaca_indicators import SMA, ATR
 from ..alpaca_modules.alpaca_api import Alpaca, AlpacaStreaming, get_symbols
-from .utils import key, get_time_till
+from .utils import key, get_time_till, StoppableThread
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -108,6 +108,7 @@ class AlpacaTrade:
     """
 
     while True:
+      live_monitoring_thread = StoppableThread(target=self.live_monitoring, daemon=True)
       market = self.apc.get_clock()
 
       if market['is_open'] or not run_during_market:
@@ -117,8 +118,9 @@ class AlpacaTrade:
         iteration = 0
 
         if not self.allow_daytrading:
-          live_monitoring_thread = threading.Thread(target=self.live_monitoring, daemon=True)
           live_monitoring_thread.start()
+        else:
+          live_monitoring_thread.stop()
 
         while True:
           iteration += 1
@@ -142,7 +144,9 @@ class AlpacaTrade:
 
       print('\n::::: Stopping algorithm. ')
 
-      self.stream.close()
+      if not live_monitoring_thread.stopped():
+        live_monitoring_thread.stop()
+        print('      ~~Monitoring stopped.')
 
       market = self.apc.get_clock()
       seconds = get_time_till(market, till='next_open')
