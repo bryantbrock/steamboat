@@ -1,6 +1,5 @@
 from ..alpaca_modules.alpaca_indicators import SMA, ATR
 from ..alpaca_modules.alpaca_api import Alpaca, AlpacaStreaming, get_symbols
-from ..alpaca_modules.alpaca_monitor import live_monitoring
 from .utils import key, get_time_till
 from datetime import datetime
 from dotenv import load_dotenv
@@ -44,6 +43,9 @@ class AlpacaTrade:
     self.orders = []
     self.pending_orders = []
     self.buying_power = 0
+
+    self.stream = None
+    self.streams = []
 
   def iterate(self):
     """
@@ -103,21 +105,17 @@ class AlpacaTrade:
 
       if market['is_open'] or not run_during_market:
 
-        print('\n   :: Markets are OPEN. Running algorithm. ')
+        print('\n::::: Markets are OPEN. Running algorithm. ')
         iteration_start_time = time.time()
         iteration = 0
 
         if not self.allow_daytrading:
-          live_monitoring_thread = threading.Thread(
-            target=live_monitoring,
-            args=(self,),
-            daemon=True
-          )
+          live_monitoring_thread = threading.Thread(target=self.live_monitoring, daemon=True)
           live_monitoring_thread.start()
 
         while True:
           iteration += 1
-          print('\n\n   :: Iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
+          print('\n\n::::: Iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
           market = self.apc.get_clock()
           seconds = get_time_till(market, till='next_close')
 
@@ -129,10 +127,10 @@ class AlpacaTrade:
 
           self.iterate()
 
-          print('\n   :: Finished iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
+          print('::::: Finished iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
           time.sleep(iterate_every - ((time.time() - iteration_start_time) % iterate_every))
 
-      print('\n  :: Markets are CLOSED. Sleeping. ')
+      print('\n::::: Markets are CLOSED. Sleeping. ')
 
       #TODO: Cancel market data streaming.
 
@@ -213,3 +211,46 @@ class AlpacaTrade:
           order['symbol'], order['qty'], order['price'] * self.take_profit,
           order['price'] * self.stop_loss, tif='gtc'
         )
+
+  def sell(self, symbol):
+    for position in self.positions:
+      if position['symbol'] == symbol:
+        self.apc.sell(symbol, position['qty'])
+        self.streams.remove(f'T.{symbol}')
+
+        print('   Placing a sell order for {} {}'.format(position['qty'], symbol))
+
+        # Restart monitoring
+        self.stream.close()
+        self.stream = self.apc_stream.connect(self.streams, on_message=self.monitor_positions)
+
+  def live_monitoring(self):
+    self.positions = self.apc.get_positions()
+    self.streams = ['T.{}'.format(p['symbol']) for p in self.positions]
+
+    print('      ~~Monitoring started...')
+    print('      ~~Streams to monitor today: ', self.streams)
+    self.stream = self.apc_stream.connect(self.streams, on_message=self.monitor_positions)
+
+  def unwrap_message(self, message):
+    message = json.loads(message)
+
+    if 'data' not in message:
+      return
+
+    data = message['data']
+
+    if 'T' not in data:
+      return
+
+    return (data['T'], data['p'])
+
+  def monitor_positions(self, ws, message):
+    symbol, price = self.unwrap_message(message)
+    print(f'      ~~Message: {symbol} is at ${price}')
+
+    """
+      This function is only necessary allow_daytrading=False.
+      Return 'restart' if sold stocks, else do nothing.
+    """
+    self.monitoring(symbol, price)
