@@ -61,11 +61,11 @@ class AlpacaTrade:
       return
 
     if len(self.positions) == self.max_positions:
-      print(f'   Max: {self.max_positions} positions open - skipping iteration.')
+      print(f'      Max: {self.max_positions} positions open - skipping iteration.')
       return
 
     if len(self.orders) == self.max_positions:
-      print(f'   Max: {self.max_positions} orders already queued - skipping iteration.')
+      print(f'      Max: {self.max_positions} orders already queued - skipping iteration.')
       return
 
     self.symbols = [tick['symbol'] for tick in get_symbols(screener=self.screener)]
@@ -256,6 +256,5 @@ class AlpacaTrade:
 
   def monitor_positions(self, ws, message):
     symbol, price = self.unwrap_message(message)
-    print(f'      ~~Message: {symbol} is at ${price}')
 
     self.monitoring(symbol, price)
