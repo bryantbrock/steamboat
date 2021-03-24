@@ -1,8 +1,9 @@
-from alpaca_indicators import SMA, ATR
-from alpaca_api import Alpaca, AlpacaStreaming, get_symbols
-from alpaca_monitor import live_monitoring
-from utils import key, get_time_till
+from ..alpaca_modules.alpaca_indicators import SMA, ATR
+from ..alpaca_modules.alpaca_api import Alpaca, AlpacaStreaming, get_symbols
+from ..alpaca_modules.alpaca_monitor import live_monitoring
+from .utils import key, get_time_till
 from datetime import datetime
+from dotenv import load_dotenv
 
 import numpy as np
 import pandas as pd
@@ -12,14 +13,14 @@ import threading
 
 
 
-
 # Main class: AlpacaTrade
 
-class AlpacaTrade(object):
+class AlpacaTrade:
 
-  def __init__(self,api_key, api_secret, allow_daytrading=False,
-               needed_periods=8, max_positions=4, bar_period='1D',
-               stop_loss=None, take_profit=None, data_limit=200):
+  def __init__(self, api_key, api_secret, allow_daytrading=False,
+               needed_periods=8, max_positions=4, log=False,
+               bar_period='1D', paper=False, stop_loss=None,
+               take_profit=None, data_limit=200):
 
     """
       bar_period:   ['1D', '15Min', '5Min', '1Min'],
@@ -27,8 +28,8 @@ class AlpacaTrade(object):
       take_profit:  float between 1 - inf
       data_limit:   1000 - 200
     """
-    self.daytrading = allow_daytrading
-    self.apc = Alpaca(api_key, api_secret)
+    self.allow_daytrading = allow_daytrading
+    self.apc = Alpaca(api_key, api_secret, paper=paper, log=log)
     self.apc_stream = AlpacaStreaming(api_key, api_secret)
     self.needed_periods = needed_periods
     self.max_positions = max_positions
@@ -51,10 +52,18 @@ class AlpacaTrade(object):
     and selecting.
     """
 
-    self.get_account_info()
+    try:
+      self.get_account_info()
+    except:
+      print('   Account credentials are invalied.')
+      return
 
     if len(self.positions) == self.max_positions:
-      print('Already in max number of positions - skipping iteration.')
+      print(f'   Max: {self.max_positions} positions open - skipping iteration.')
+      return
+
+    if len(self.orders) == self.max_positions:
+      print(f'   Max: {self.max_positions} orders already queued - skipping iteration.')
       return
 
     self.symbols = [tick['symbol'] for tick in get_symbols(screener=self.screener)]
@@ -63,7 +72,7 @@ class AlpacaTrade(object):
 
     for symbol in self.symbols:
       if not self.check_data(symbol):
-        print(f'{symbol} has no data - consider manually filtering out in screener.')
+        print(f'   {symbol} has no data - consider manually filtering out in screener.')
         continue
 
       price = self.apc.get_last_trade(symbol)['last']['price']
@@ -78,7 +87,6 @@ class AlpacaTrade(object):
           break
 
         self.pending_orders.append({'symbol': symbol, 'qty': qty, 'price': price})
-        self.buying_power = self.buying_power - float(price * 1.01) * qty
 
     self.trade()
 
@@ -87,54 +95,57 @@ class AlpacaTrade(object):
     """
     The primary method of `AlpacaTrade`: call it to run the algorithm
     during market hours. If you wish to run it all the time and not check
-    for market hours, set `during_market=False`.
+    for market hours, set `run_during_market=False`.
     """
 
     while True:
-      market = apc.get_clock()
+      market = self.apc.get_clock()
 
       if market['is_open'] or not run_during_market:
 
-        print('\n :: Markets are OPEN. Running algorithm. ')
+        print('\n   :: Markets are OPEN. Running algorithm. ')
         iteration_start_time = time.time()
         iteration = 0
 
         if not self.allow_daytrading:
           live_monitoring_thread = threading.Thread(
             target=live_monitoring,
-            args=(self),
+            args=(self,),
             daemon=True
           )
           live_monitoring_thread.start()
 
         while True:
           iteration += 1
-          print('\n\n:: Iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
+          print('\n\n   :: Iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
           market = self.apc.get_clock()
           seconds = get_time_till(market, till='next_close')
 
-          if seconds < 60*1 and run_during_market:
+          if not market['is_open'] and run_during_market:
+            break
+
+          if seconds < 60*1 and market['is_open'] and run_during_market:
             break
 
           self.iterate()
 
-          print(':: Finished iteration {} at {}'.format(iteration, time.strftime(template)))
+          print('\n   :: Finished iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
           time.sleep(iterate_every - ((time.time() - iteration_start_time) % iterate_every))
 
-      print('\n :: Markets are CLOSED. Sleeping. ')
+      print('\n  :: Markets are CLOSED. Sleeping. ')
 
       #TODO: Cancel market data streaming.
 
-      market = apc.get_clock()
+      market = self.apc.get_clock()
       seconds = get_time_till(market, till='next_open')
 
       time.sleep(seconds)
 
 
   def get_account_info(self):
-    self.positions = apc.get_positions()
-    self.orders = apc.get_orders(status='open')
-    self.buying_power = float(apc.get_account()['buying_power'])
+    self.positions = self.apc.get_positions()
+    self.orders = self.apc.get_orders(status='open')
+    self.buying_power = float(self.apc.get_account()['buying_power'])
 
   def indicator(self, func, **kwargs):
     self.data = func(self.data, **kwargs)
@@ -164,7 +175,13 @@ class AlpacaTrade(object):
 
     self.data[symbol].dropna(inplace=True)
 
-    return True if len(self.data[symbol]) < self.needed_periods else False
+    if self.data[symbol].empty:
+      return False
+
+    if len(self.data[symbol]) < self.needed_periods:
+      return False
+
+    return True
 
   def check_status(self, typs, symbol):
     for typ in getattr(self, typs):
@@ -174,78 +191,23 @@ class AlpacaTrade(object):
     return False
 
   def get_qty(self, price):
+    allocation = self.buying_power / self.max_positions
+
     if self.max_positions == len(self.positions):
       return 0
 
-    return max(1, int((self.buying_power / self.max_positions) / price))
+    return max(1, int(allocation / (price * 1.05)))
 
   def trade(self):
     for order in self.selector():
       if not self.allow_daytrading:
-        print('Placing a buy order for {} {}'.format(order['qty'], order['symbol']))
-        apc.buy(order['symbol'], order['qty'])
+        print('   Placing a buy order for {} {}'.format(order['qty'], order['symbol']))
+        self.apc.buy(order['symbol'], order['qty'])
         continue
 
       if self.allow_daytrading and self.stop_loss and self.take_profit:
-        print('Placing a bracket order for {} {}'.format(order['qty'], order['symbol']))
-        apc.bracket_order(
+        print('   Placing a bracket order for {} {}'.format(order['qty'], order['symbol']))
+        self.apc.bracket_order(
           order['symbol'], order['qty'], order['price'] * self.take_profit,
           order['price'] * self.stop_loss, tif='gtc'
         )
-
-
-
-
-
-# Example
-
-
-
-class StackOne(AlpacaTrade):
-  short_sma = 20
-  long_sma = 200
-
-  def indicators(self):
-    self.indicator(SMA, periods=short_sma)
-    self.indicator(SMA, periods=long_sma)
-    self.indicator(ATR)
-
-  def screener(self, ticker):
-    return ticker['lastsale'] < 8 and ticker['lastsale'] > 1
-
-  def analyzer(self, symbol, price):
-    price_week_ago = self.data[symbol][f'{short_sma}_sma'].iloc[-5]
-    pct_change = round(((price / price_week_ago) - 1) * 100, 2)
-
-    dropped_enough = pct_change <= -15.00
-    short_is_above = self.data[symbol][f'{short_sma}_sma'].iloc[-1] > self.data[symbol][f'{long_sma}_sma'].iloc[-1]
-
-    return dropped_enough and short_is_above
-
-  def selector(self):
-    for order in self.orders:
-      symbol = order['symbol']
-      avg_volatility = sum(self.data[symbol]['ATR'].iloc[-10:]) / 10
-      order['volatility'] = avg_volatility
-
-    sorted_orders = sorted(self.orders, key=lambda x: x['volatility'])
-
-    return sorted_orders[:self.max_positions]
-
-
-
-if __name__ == '__main__':
-
-  auth = {
-    'api_key': 'PK0ZTJY4V309PKX2DNVI',
-    'secret_key': 'X4s2I5tiyRavpHl9Rre8SvNuiO8Huxjh5AsFE07e',
-  }
-
-  apc_trade = StackOne(
-    auth['api_key'],
-    auth['secret_key'],
-    max_positions=2, stop_loss=0.70,
-    take_profit=1.06, data_limit=400
-  )
-
-  apc_trade.run()

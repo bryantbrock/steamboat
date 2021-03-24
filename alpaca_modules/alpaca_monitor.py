@@ -1,4 +1,4 @@
-from alpaca_api import Alpaca, AlpacaStreaming
+from .alpaca_api import Alpaca, AlpacaStreaming
 
 
 def live_monitoring(apc_trade):

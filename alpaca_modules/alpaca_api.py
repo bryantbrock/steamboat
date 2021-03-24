@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from dateutil import tz
+from .utils import pprint, chunk
 
 import pandas as pd
 import websocket
@@ -19,13 +20,6 @@ import time
 APC_DATA_ENDPOINT = 'https://data.alpaca.markets'
 APC_ENDPOINT = 'https://api.alpaca.markets'
 APC_PAPER_ENDPOINT = 'https://paper-api.alpaca.markets'
-
-
-def pprint(data, indent=2):
-  print(json.dumps(data, indent=indent))
-
-def chunk(lst, n):
-  return [lst[i:i + n] for i in range(0, len(lst), n)]
 
 
 class Alpaca(object):
@@ -58,6 +52,10 @@ class Alpaca(object):
 
       if self.log:
         print('=> {} {} to {}: {}'.format(date, typ.upper(), endpoint, info))
+
+      if res.status_code != 200:
+        print('    Error code: ', res.status_code)
+        print('    Error message: ', res.text)
 
       return res.json()
     except (Exception, ConnectionError) as err:
@@ -261,10 +259,19 @@ def get_symbols(limit=10000, exchanges=['nyse'],
 
   params = []
   result = []
-  agent = {
-    'user-agent': 'Mozilla/5.0 (Macintosh; \
-      Intel Mac OS X 11_2_2) AppleWebKit/537.36 \
-      (KHTML,like Gecko) Chrome/88.0.4324.192 Safari/537.36',
+
+  headers = {
+    'authority': 'api.nasdaq.com',
+    'sec-ch-ua': '"Google Chrome";v="89", "Chromium";v="89", ";Not A Brand";v="99"',
+    'accept': 'application/json, text/plain, */*',
+    'sec-ch-ua-mobile': '?0',
+    'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Safari/537.36',
+    'origin': 'https://www.nasdaq.com',
+    'sec-fetch-site': 'same-site',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-dest': 'empty',
+    'referer': 'https://www.nasdaq.com/',
+    'accept-language': 'en-US,en;q=0.9',
   }
 
   for exchange in exchanges:
@@ -272,7 +279,7 @@ def get_symbols(limit=10000, exchanges=['nyse'],
 
   for param in params:
     res = requests.get(
-      'https://api.nasdaq.com/api/screener/stocks', headers=agent, params=param
+      'https://api.nasdaq.com/api/screener/stocks', headers=headers, params=param
     ).json()
 
     for ticker in res['data']['table']['rows']:
