@@ -61,7 +61,6 @@ class AlpacaTrade:
       return
 
     if len(self.positions) == self.max_positions:
-      print(f'      Max: {self.max_positions} positions open - skipping iteration.')
       return
 
     buy_orders = []
@@ -70,8 +69,9 @@ class AlpacaTrade:
         buy_orders.append(order)
 
     if len(self.orders) == self.max_positions and len(buy_orders) == self.max_positions:
-      print(f'      Max: {self.max_positions} buy orders already queued - skipping iteration.')
       return
+
+    print('::::: Start analyzing stocks at {}'.format(time.strftime("%Y-%m-%d %H:%M:%S")))
 
     self.symbols = [tick['symbol'] for tick in get_symbols(screener=self.screener)]
     self.data = self.apc.historical_data(self.symbols, tf=self.bar_period, limit=self.data_limit)
@@ -96,11 +96,11 @@ class AlpacaTrade:
         self.pending_orders.append({'symbol': symbol, 'qty': qty, 'price': price})
 
     self.trade()
+    print('::::: Complete analyzing stocks at {}'.format(time.strftime("%Y-%m-%d %H:%M:%S")))
 
 
-  def run(self, iterate_every=60*1,
-          run_during_market=True,
-          minutes_after_open=20):
+  def run(self, iterate_every=60*1, run_during_market=True,
+          minutes_after_open=20, minutes_till_close=1):
     """
     The primary method of `AlpacaTrade`: call it to run the algorithm
     during market hours. If you wish to run it all the time and not check
@@ -123,17 +123,15 @@ class AlpacaTrade:
         while True:
           iteration += 1
           market = self.apc.get_clock()
-          seconds = get_time_till(market, till='next_close')
+          seconds = get_time_till(market, till='next_close', log=False)
 
           if not market['is_open'] and run_during_market:
             break
 
-          if seconds < 60*1 and market['is_open'] and run_during_market:
+          if seconds < 60*minutes_till_close and market['is_open'] and run_during_market:
             break
 
-          print('::::: Started iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
           self.iterate()
-          print('::::: Finished iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
 
           if len(self.positions) == self.max_positions and \
              len(self.streams) == 0 and run_during_market and \
@@ -144,7 +142,7 @@ class AlpacaTrade:
 
       print('\n::::: Stopping algorithm. ')
 
-      #TODO: Cancel market data streaming.
+      self.stream.close()
 
       market = self.apc.get_clock()
       seconds = get_time_till(market, till='next_open')
