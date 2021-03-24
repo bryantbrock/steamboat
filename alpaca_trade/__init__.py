@@ -1,6 +1,6 @@
 from ..alpaca_modules.alpaca_indicators import SMA, ATR
 from ..alpaca_modules.alpaca_api import Alpaca, AlpacaStreaming, get_symbols
-from .utils import key, get_time_till, verify
+from .utils import key, get_time_till
 from datetime import datetime
 from dotenv import load_dotenv
 
