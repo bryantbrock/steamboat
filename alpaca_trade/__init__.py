@@ -1,6 +1,6 @@
 from ..alpaca_modules.alpaca_indicators import SMA, ATR
 from ..alpaca_modules.alpaca_api import Alpaca, AlpacaStreaming, get_symbols
-from .utils import key, get_time_till
+from .utils import key, get_time_till, verify
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -64,8 +64,13 @@ class AlpacaTrade:
       print(f'      Max: {self.max_positions} positions open - skipping iteration.')
       return
 
-    if len(self.orders) == self.max_positions:
-      print(f'      Max: {self.max_positions} orders already queued - skipping iteration.')
+    buy_orders = []
+    for order in self.orders:
+      if order['side'] == 'buy':
+        buy_orders.append(order)
+
+    if len(self.orders) == self.max_positions and len(buy_orders) == self.max_positions:
+      print(f'      Max: {self.max_positions} buy orders already queued - skipping iteration.')
       return
 
     self.symbols = [tick['symbol'] for tick in get_symbols(screener=self.screener)]
@@ -125,9 +130,7 @@ class AlpacaTrade:
             break
 
           print('::::: Started iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
-
           self.iterate()
-
           print('::::: Finished iteration {} at {}'.format(iteration, time.strftime("%Y-%m-%d %H:%M:%S")))
 
           if len(self.positions) == self.max_positions and \
@@ -144,6 +147,7 @@ class AlpacaTrade:
       market = self.apc.get_clock()
       seconds = get_time_till(market, till='next_open')
 
+      print('\n::::: Sleeping till next market open. ')
       time.sleep(seconds)
 
 
@@ -234,6 +238,7 @@ class AlpacaTrade:
         # Restart monitoring
         self.stream.close()
         self.stream = self.apc_stream.connect(self.streams, on_message=self.monitor_positions)
+        self.positions = self.apc.get_positions()
 
   def live_monitoring(self):
     self.positions = self.apc.get_positions()
