@@ -154,20 +154,22 @@ class AlpacaTrade:
     """ Initializes indicators """
     pass
 
+
   def screener(self, ticker):
     """
       `ticker` keys: ['lastsale', 'symbol', 'exchange', 'pctchange']
        Return: boolean =>  ..to determine if the ticker passes the screen
     """
-    return True
+    pass
 
   def analyzer(self, symbol, price):
     """ Return: boolean => ...to determine if it passes the buy conditions """
-    return True
+    pass
 
   def selector(self):
     """ Return: array => ...of orders (from 'create_order') to be executed """
-    return []
+    pass
+
 
   def check_data(self, symbol):
     if symbol not in self.data:
