@@ -19,7 +19,7 @@ class AlpacaTrade:
   def __init__(self, api_key, api_secret, allow_daytrading=False,
                needed_periods=8, max_positions=4, log=False,
                bar_period='1D', paper=False, stop_loss=None,
-               take_profit=None, data_limit=200):
+               take_profit=None, data_limit=200, analyze_only=False):
 
     """
       bar_period:   ['1D', '15Min', '5Min', '1Min'],
@@ -36,6 +36,7 @@ class AlpacaTrade:
     self.data_limit = data_limit
     self.stop_loss = stop_loss
     self.take_profit = take_profit
+    self.analyze_only = analyze_only
 
     self.data = None
     self.symbols = []
@@ -60,16 +61,17 @@ class AlpacaTrade:
       print('   Account credentials are invalied.')
       return
 
-    if len(self.positions) == self.max_positions:
-      return
+    if not self.analyze_only:
+      if len(self.positions) == self.max_positions:
+        return
 
-    buy_orders = []
-    for order in self.orders:
-      if order['side'] == 'buy':
-        buy_orders.append(order)
+      buy_orders = []
+      for order in self.orders:
+        if order['side'] == 'buy':
+          buy_orders.append(order)
 
-    if len(self.orders) == self.max_positions and len(buy_orders) == self.max_positions:
-      return
+      if len(self.orders) == self.max_positions and len(buy_orders) == self.max_positions:
+        return
 
     print('::::: Start analyzing stocks at {}'.format(time.strftime("%Y-%m-%d %H:%M:%S")))
 
@@ -86,6 +88,9 @@ class AlpacaTrade:
 
       if self.analyzer(symbol, price):
         if self.check_status('positions', symbol) or self.check_status('orders', symbol):
+          continue
+
+        if self.analyze_only:
           continue
 
         qty = self.get_qty(price)
@@ -229,7 +234,7 @@ class AlpacaTrade:
         )
 
 
-  # Live monitoroing if allow_daytrading=False
+  # Monitoring for non-daytrading
 
 
   def sell(self, symbol):
