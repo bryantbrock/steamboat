@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
+
+import threading
 import time
 import pytz
-import threading
 
 
 def key(obj, k):
@@ -40,8 +41,6 @@ def get_time_till(market, till='next_open', log=True):
     print(f'      _Markets {open_close} on ', local_date, f' :: Local Time (UTC {local_offset})')
 
   return seconds
-
-import threading
 
 
 class StoppableThread(threading.Thread):

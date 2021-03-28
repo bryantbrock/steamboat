@@ -53,9 +53,21 @@ def ATR(data, periods=14):
   return data
 
 
-def SMA(data, periods=9):
+def sma(data, col, periods=14):
   for df in data:
-    data[df][f'{periods}_sma'] = data[df]['close'].rolling(periods).mean()
+    data[df]['{}_{}'.format(periods, col.lower())] = data[df][col].rolling(periods).mean()
+
+  return data
+
+def is_above(data, sma1, sma2):
+  for df in data:
+    data[df]['is_above'] = data[df][f'{sma1}_close'] > data[df][f'{sma2}_close']
+
+  return data
+
+def high_low(data):
+  for df in data:
+    data[df]['high_low'] = (data[df]['high'] / data[df]['low']) - 1
 
   return data
 

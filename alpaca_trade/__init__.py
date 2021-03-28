@@ -1,4 +1,4 @@
-from ..alpaca_modules.alpaca_indicators import SMA, ATR
+from ..alpaca_modules.alpaca_indicators import *
 from ..alpaca_modules.alpaca_api import Alpaca, AlpacaStreaming, get_symbols
 from .utils import key, get_time_till, StoppableThread
 from datetime import datetime
@@ -9,6 +9,13 @@ import pandas as pd
 import time
 import json
 import threading
+
+
+# TODO: Create the logic for daytrading : stop script
+#   if in max positions but keep streaming (account data) on. Once
+#   we get notified we have less than max number of positions,
+#   run the analyzer once again.
+
 
 
 
@@ -105,12 +112,15 @@ class AlpacaTrade:
 
 
   def run(self, iterate_every=60*1, run_during_market=True,
-          minutes_after_open=20, minutes_till_close=1):
+          minutes_after_open=20, minutes_till_close=1, account=None):
     """
     The primary method of `AlpacaTrade`: call it to run the algorithm
     during market hours. If you wish to run it all the time and not check
     for market hours, set `run_during_market=False`.
     """
+
+    if account:
+      print(f"\n [*_*] Running algorithm for {account}")
 
     while True:
       live_monitoring_thread = StoppableThread(target=self.live_monitoring, daemon=True)
@@ -119,6 +129,10 @@ class AlpacaTrade:
       if market['is_open'] or not run_during_market:
 
         print('\n::::: Markets are OPEN. Running algorithm. ')
+        print('      Current time is {}'.format(datetime.fromtimestamp(
+          datetime.now().timestamp()
+        ).strftime("%A, %B %d, %Y %I:%M:%S")))
+
         iteration_start_time = time.time()
         iteration = 0
 
@@ -166,29 +180,27 @@ class AlpacaTrade:
     self.orders = self.apc.get_orders(status='open')
     self.buying_power = float(self.apc.get_account()['buying_power'])
 
-  def indicator(self, func, **kwargs):
-    self.data = func(self.data, **kwargs)
+  def indicator(self, func, *args, **kwargs):
+    self.data = func(self.data, *args, **kwargs)
 
   def indicators(self):
     """ Initializes indicators """
     pass
-
 
   def screener(self, ticker):
     """
       `ticker` keys: ['lastsale', 'symbol', 'exchange', 'pctchange']
        Return: boolean =>  ..to determine if the ticker passes the screen
     """
-    pass
+    return True
 
   def analyzer(self, symbol, price):
     """ Return: boolean => ...to determine if it passes the buy conditions """
-    pass
+    return True
 
   def selector(self):
     """ Return: array => ...of orders (from 'create_order') to be executed """
-    pass
-
+    return []
 
   def check_data(self, symbol):
     if symbol not in self.data:
@@ -234,7 +246,7 @@ class AlpacaTrade:
         )
 
 
-  # Monitoring for non-daytrading
+  # Monitoring
 
 
   def sell(self, symbol):
