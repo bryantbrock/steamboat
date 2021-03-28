@@ -17,3 +17,4 @@ from steamboat import AlpacaTrade, AlpacaBacktest
 ## Documentation
 ### `AlpacaTrade`
 ### `AlpacaBacktest`
+### `AlpacaScreen`
