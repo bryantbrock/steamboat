@@ -1,5 +1,9 @@
 from ..alpaca_modules.alpaca_api import Alpaca, get_symbols
-
+import json
+import pandas as pd
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 
@@ -25,17 +29,17 @@ class AlpacaBacktest(object):
     self.trade_data = {}
 
 
-  # ========
+  # Backtesting
 
   def run(self):
-    # For backtest sake, grab stocks higher in price for more data
-    self.max_price = self.max_price + 20
-
     self.symbols = [tick['symbol'] for tick in get_symbols(screener=self.stock_screen)][:self.stock_count]
     self.data = self.apc.historical_data(self.symbols, tf=self.periods, limit=self.data_limit)
     self.indicators()
+    self.idxs = len(self.data[self.symbols[0]].index)
+    self.data_since = self.data[self.symbols[0]].index[0]
 
-    print('Data since ', self.data[self.symbols[0]].index[0])
+    print('Data since ', self.data_since)
+    print('Running backtest...')
 
     for symbol in self.symbols:
       if not self.check_data(symbol):
@@ -58,13 +62,14 @@ class AlpacaBacktest(object):
           self.add_return()
           continue
 
-        if price_open < self.min_price or price_open > self.max_price:
+        if price_open < 1 or price_open > 5:
           self.add_return()
           continue
 
         if not self.position[symbol]:
-          self.analyze(symbol, price_open)
-          same_period = True
+          if self.analyze(symbol, price_open):
+            self.buy()
+            self.same_period = True
 
         if self.position[symbol]:
           self.increment_trade_periods()
@@ -78,6 +83,13 @@ class AlpacaBacktest(object):
           at_stop_loss = sl_price >= price_low or sl_price >= price_close
 
           if at_take_profit and at_stop_loss:
+
+            # TODO: We are currently removing the trade
+            # - rather, we should get 5 minute period
+            # data for this specific day and determine
+            # which one came first. Only applies if
+            # our current periods are '1D' or '15Min'
+
             self.remove_trade_data()
             self.add_return()
             continue
@@ -103,7 +115,11 @@ class AlpacaBacktest(object):
         if len(self.trade_data[symbol][self.trade_count[symbol]]) < 2:
           self.remove_trade_data()
 
-  # ========
+      self.print_results()
+      self.plot_daily_returns()
+
+
+  # Utilities
 
 
   def check_data(self, symbol):
@@ -162,3 +178,104 @@ class AlpacaBacktest(object):
 
   def indicator(self, func, *args, **kwargs):
     self.data = func(self.data, *args, **kwargs)
+
+
+  # Logging
+
+
+  def plot_daily_returns(self):
+    daily_returns_df = pd.DataFrame()
+    daily_returns_df['time'] = np.array(self.idxs)
+    daily_returns_df.set_index('time', inplace=True)
+
+    temp = pd.DataFrame()
+    temp['time'] = np.array(self.idxs)
+    temp.set_index('time', inplace=True)
+
+    for symbol in self.symbols:
+      if len(self.trade_return[symbol]) < self.idxs:
+        continue
+
+      temp[symbol] = np.array(
+        self.trade_return[symbol][:self.idxs]
+      )
+
+    temp.replace(0, np.nan, inplace=True)
+    daily_returns_df['strategy'] = np.cumsum(temp.mean(axis=1, skipna=True))
+
+    plt.plot(
+      daily_returns_df.index,
+      daily_returns_df['strategy'],
+    )
+
+    plt.xlabel('time')
+    plt.ylabel('return')
+    plt.show()
+
+  def print_results(self):
+    success = 0
+    failed = 0
+    all_succ = []
+    all_fail = []
+    fail_days_in_trade = []
+    succ_days_in_trade = []
+    overall_return = [1]
+
+    for symbol in self.symbols:
+      for k, v in self.trade_data[symbol].items():
+        if len(v) < 3:
+          continue
+
+        val = (v[1]/v[0])
+
+        if val == 0:
+          continue
+
+        if val > 1:
+          success += 1
+          all_succ.append((v[1]/v[0]) - 1)
+          succ_days_in_trade.append(v[2])
+
+        if val < 1:
+          failed += 1
+          all_fail.append((v[1]/v[0]) - 1)
+          fail_days_in_trade.append(v[2])
+
+        overall_return.append(overall_return[-1] * val)
+
+    if failed != 0:
+      avg_failed = sum(i for i in all_fail) / max(1, len(all_fail))
+      avg_failed_days = sum(i for i in fail_days_in_trade) / max(1, len(fail_days_in_trade))
+      failed_results = {
+        'failed_trades': failed,
+        'avg_failed_trade': round(avg_failed, 2),
+        'largest_failed_trade': round(min(all_fail), 2),
+        'avg_time_in_failed_trade': round(avg_failed_days, 2),
+        'longest_time_in_failed_trade': max(fail_days_in_trade),
+      }
+    else:
+      failed_results = {}
+
+    if success != 0:
+      avg_success_days = sum(i for i in succ_days_in_trade) / max(1, len(succ_days_in_trade))
+      avg_success = sum(i for i in all_succ) / max(1, len(all_succ))
+      success_results = {
+        'success_trades': success,
+        'avg_success_trade': round(avg_success, 2),
+        'largest_success_trade': round(max(all_succ), 2),
+        'avg_time_in_success_trade': round(avg_success_days, 2),
+        'longest_time_in_success_trade': max(succ_days_in_trade),
+      }
+    else:
+      success_results = {}
+
+    final = {}
+    final.update(success_results)
+    final.update(failed_results)
+    final.update({
+      'overall_return': round(overall_return[-1], 4),
+      'data_since': str(self.data_since),
+    })
+
+    # Print results
+    print(json.dumps(final, indent=4))

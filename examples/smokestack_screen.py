@@ -17,9 +17,11 @@ class Screener(AlpacaScreen):
   def indicators(self):
     self.indicator(sma, 'close', periods=self.short_sma)
     self.indicator(sma, 'close', periods=self.long_sma)
+    self.indicator(is_above, self.short_sma, self.long_sma)
+
     self.indicator(ATR, periods=self.atr)
     self.indicator(sma, 'ATR', periods=self.atr_sma)
-    self.indicator(is_above, self.short_sma, self.long_sma)
+
     self.indicator(high_low)
     self.indicator(sma, 'high_low', periods=self.high_low_avg)
 

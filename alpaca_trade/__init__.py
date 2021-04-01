@@ -26,7 +26,7 @@ class AlpacaTrade:
   def __init__(self, api_key, api_secret, allow_daytrading=False,
                needed_periods=8, max_positions=4, log=False,
                bar_period='1D', paper=False, stop_loss=None,
-               take_profit=None, data_limit=200, analyze_only=False):
+               take_profit=None, data_limit=200, simulate=False):
 
     """
       bar_period:   ['1D', '15Min', '5Min', '1Min'],
@@ -43,7 +43,7 @@ class AlpacaTrade:
     self.data_limit = data_limit
     self.stop_loss = stop_loss
     self.take_profit = take_profit
-    self.analyze_only = analyze_only
+    self.simulate = simulate
 
     self.data = None
     self.symbols = []
@@ -68,17 +68,18 @@ class AlpacaTrade:
       print('   Account credentials are invalied.')
       return
 
-    if not self.analyze_only:
-      if len(self.positions) == self.max_positions:
-        return
+    if len(self.positions) == self.max_positions:
+      # TODO: display that we are skipping and then
+      # try to sleep until we have exited a position.
+      return
 
-      buy_orders = []
-      for order in self.orders:
-        if order['side'] == 'buy':
-          buy_orders.append(order)
+    buy_orders = []
+    for order in self.orders:
+      if order['side'] == 'buy':
+        buy_orders.append(order)
 
-      if len(self.orders) == self.max_positions and len(buy_orders) == self.max_positions:
-        return
+    if len(self.orders) == self.max_positions and len(buy_orders) == self.max_positions:
+      return
 
     print('::::: Start analyzing stocks at {}'.format(time.strftime("%Y-%m-%d %H:%M:%S")))
 
@@ -95,9 +96,6 @@ class AlpacaTrade:
 
       if self.analyzer(symbol, price):
         if self.check_status('positions', symbol) or self.check_status('orders', symbol):
-          continue
-
-        if self.analyze_only:
           continue
 
         qty = self.get_qty(price)
@@ -120,7 +118,7 @@ class AlpacaTrade:
     """
 
     if account:
-      print(f"\n [*_*] Running algorithm for {account}")
+      print(f"\n [*_*] Running algorithm for {account} [*_*]")
 
     while True:
       live_monitoring_thread = StoppableThread(target=self.live_monitoring, daemon=True)
@@ -182,25 +180,6 @@ class AlpacaTrade:
 
   def indicator(self, func, *args, **kwargs):
     self.data = func(self.data, *args, **kwargs)
-
-  def indicators(self):
-    """ Initializes indicators """
-    pass
-
-  def screener(self, ticker):
-    """
-      `ticker` keys: ['lastsale', 'symbol', 'exchange', 'pctchange']
-       Return: boolean =>  ..to determine if the ticker passes the screen
-    """
-    return True
-
-  def analyzer(self, symbol, price):
-    """ Return: boolean => ...to determine if it passes the buy conditions """
-    return True
-
-  def selector(self):
-    """ Return: array => ...of orders (from 'create_order') to be executed """
-    return []
 
   def check_data(self, symbol):
     if symbol not in self.data:
@@ -287,3 +266,28 @@ class AlpacaTrade:
     symbol, price = self.unwrap_message(message)
 
     self.monitoring(symbol, price)
+
+  def monitor_sl_and_tp(self):
+    for position in self.positions:
+      if position['symbol'] == symbol:
+        buy_price = float(position['avg_entry_price'])
+        hit_take_profit = (self.take_profit * buy_price) <= price
+        hit_stop_loss = (self.stop_loss * buy_price) >= price
+
+        if hit_take_profit or hit_stop_loss:
+          self.sell(symbol)
+
+
+  # Custom
+
+  def indicators(self):
+    pass
+
+  def screener(self, ticker):
+    return True
+
+  def analyzer(self, symbol, price):
+    return True
+
+  def selector(self):
+    return []

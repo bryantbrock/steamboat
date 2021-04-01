@@ -8,7 +8,7 @@ class AlpacaScreen:
 
   def __init__(self, api_key, secret_key, periods='1D',
                paper=False, data_limit=200,
-               needed_periods=14):
+               needed_periods=14, exchanges=['nyse', 'nasdaq', 'amex']):
 
     """
       periods    : '1D', '15Min', '5Min', '1Min'
@@ -19,12 +19,15 @@ class AlpacaScreen:
     self.periods = periods
     self.data_limit = data_limit
     self.needed_periods = needed_periods
+    self.exchanges = exchanges
 
     self.data = None
     self.symbols = []
 
   def run(self):
-    self.symbols = [tick['symbol'] for tick in get_symbols(screener=self.stock_screen)]
+    self.symbols = [tick['symbol'] for tick in get_symbols(
+      exchanges=self.exchanges, screener=self.stock_screen
+    )]
     self.data = self.apc.historical_data(self.symbols, tf=self.periods, limit=self.data_limit)
     self.indicators()
 
@@ -36,6 +39,20 @@ class AlpacaScreen:
 
   def indicator(self, func, *args, **kwargs):
     self.data = func(self.data, *args, **kwargs)
+
+  def check_data(self, symbol):
+    if symbol not in self.data:
+      return False
+
+    self.data[symbol].dropna(inplace=True)
+
+    if self.data[symbol].empty:
+      return False
+
+    if len(self.data[symbol]) < self.needed_periods:
+      return False
+
+    return True
 
   # Custom functions
 
