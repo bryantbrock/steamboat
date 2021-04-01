@@ -9,18 +9,14 @@ import numpy as np
 
 class AlpacaBacktest(object):
 
-  def __init__(self, api_key, secret_key, min_price=1, max_price=100,
-               data_limit=1000, periods='5Min', take_profit=1.10,
-               stop_loss=0.97, stock_count=None):
+  def __init__(self, api_key, secret_key, data_limit=1000,
+               periods='5Min', take_profit=1.10, stop_loss=0.97):
 
     self.apc = Alpaca(api_key, secret_key)
-    self.stock_count = stock_count
     self.stop_loss = stop_loss
     self.take_profit = take_profit
     self.periods = periods
     self.data_limit = data_limit
-    self.max_price = max_price
-    self.min_price = min_price
 
     self.position = {}
     self.trade_periods = {}
@@ -32,7 +28,10 @@ class AlpacaBacktest(object):
   # Backtesting
 
   def run(self):
-    self.symbols = [tick['symbol'] for tick in get_symbols(screener=self.stock_screen)][:self.stock_count]
+    self.symbols = [tick['symbol'] for tick in get_symbols(
+      # exchanges=['nyse', 'nasdaq', 'amex'],
+      screener=self.screener
+    )]
     self.data = self.apc.historical_data(self.symbols, tf=self.periods, limit=self.data_limit)
     self.indicators()
     self.idxs = len(self.data[self.symbols[0]].index)
@@ -62,12 +61,12 @@ class AlpacaBacktest(object):
           self.add_return()
           continue
 
-        if price_open < 1 or price_open > 5:
-          self.add_return()
-          continue
+        # if price_open < 1 or price_open > 5:
+        #   self.add_return()
+        #   continue
 
         if not self.position[symbol]:
-          if self.analyze(symbol, price_open):
+          if self.analyzer(symbol, price_open):
             self.buy()
             self.same_period = True
 
@@ -102,7 +101,7 @@ class AlpacaBacktest(object):
             self.sell('take_profit', price_last)
             continue
 
-          self.add_return((price_close / price_last) - 1)
+          self.add_return((price_close / self.data[symbol]['close'][idx-1]) - 1)
           continue
 
         self.add_return()
@@ -115,8 +114,8 @@ class AlpacaBacktest(object):
         if len(self.trade_data[symbol][self.trade_count[symbol]]) < 2:
           self.remove_trade_data()
 
-      self.print_results()
-      self.plot_daily_returns()
+    self.print_results()
+    self.plot_daily_returns()
 
 
   # Utilities
@@ -124,17 +123,23 @@ class AlpacaBacktest(object):
 
   def check_data(self, symbol):
     if symbol not in self.data:
+      self.symbols.remove(symbol)
       return False
 
     self.data[symbol].dropna(inplace=True)
 
     if self.data[symbol].empty:
+      self.symbols.remove(symbol)
       return False
 
     if len(self.data[symbol]) < 5:
+      self.symbols.remove(symbol)
       return False
 
     return True
+
+  def price_bought(self):
+    return self.trade_data[self.symbol][self.trade_count[self.symbol]][0]
 
   def add_return(self, ret=0):
     self.trade_return[self.symbol].append(ret)
@@ -147,9 +152,6 @@ class AlpacaBacktest(object):
     self.position[self.symbol] = False
     self.trade_periods[self.symbol] = 0
     self.trade_data[self.symbol][self.trade_count[self.symbol]] = []
-
-  def price_bought(self):
-    self.trade_data[self.symbol][self.trade_count[self.symbol]][0]
 
   def initialize_vars(self):
     self.position[self.symbol] = False
@@ -174,7 +176,7 @@ class AlpacaBacktest(object):
     trade_list.append(self.trade_periods[self.symbol])
 
     self.add_return((price * 0.995 / price_last) - 1)
-    self.position[symbol] = False
+    self.position[self.symbol] = False
 
   def indicator(self, func, *args, **kwargs):
     self.data = func(self.data, *args, **kwargs)
@@ -193,6 +195,10 @@ class AlpacaBacktest(object):
     temp.set_index('time', inplace=True)
 
     for symbol in self.symbols:
+
+      if symbol not in self.trade_data:
+        continue
+
       if len(self.trade_return[symbol]) < self.idxs:
         continue
 
@@ -222,6 +228,10 @@ class AlpacaBacktest(object):
     overall_return = [1]
 
     for symbol in self.symbols:
+
+      if symbol not in self.trade_data:
+        continue
+
       for k, v in self.trade_data[symbol].items():
         if len(v) < 3:
           continue
